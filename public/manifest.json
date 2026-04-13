@@ -1,0 +1,17 @@
+{
+  "name": "FitCoach - Lidia",
+  "short_name": "FitCoach",
+  "description": "Tu entrenador personal y nutricionista con IA",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1b2d",
+  "theme_color": "#0f1b2d",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
