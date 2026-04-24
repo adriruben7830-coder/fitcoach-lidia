@@ -5,23 +5,18 @@ export async function POST(req) {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return NextResponse.json({ error: "API key no configurada" }, { status: 500 });
 
-    const { image } = await req.json();
-    if (!image) return NextResponse.json({ error: "No se recibió imagen" }, { status: 400 });
+    const { meal } = await req.json();
+    if (!meal) return NextResponse.json({ error: "No se recibió descripción" }, { status: 400 });
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
+        max_tokens: 500,
         messages: [{
           role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: "image/jpeg", data: image } },
-            { type: "text", text: `Analiza esta comida y estima sus macronutrientes. Responde UNICAMENTE con JSON valido sin backticks:
-{"alimento":"nombre del plato","calorias":numero,"proteinas":numero,"carbohidratos":numero,"grasas":numero,"fibra":numero,"valoracion":"frase corta","sugerencia":"frase corta","puntuacion":numero_1_al_10}
-Contexto: mujer 26 anos, 66.9kg, objetivo GANAR masa muscular hasta 70kg. Macros: 2400kcal, 145g proteina, 270g carbs, 67g grasa. No come pescado.` }
-          ]
+          content: `Estima los macronutrientes de esta comida: "${meal}". Responde UNICAMENTE con JSON valido sin backticks ni texto extra: {"calorias":numero,"proteinas":numero,"carbohidratos":numero,"grasas":numero}. Estima cantidades razonables para una porcion normal de una mujer adulta.`
         }]
       }),
     });
@@ -34,7 +29,7 @@ Contexto: mujer 26 anos, 66.9kg, objetivo GANAR masa muscular hasta 70kg. Macros
     if (match) {
       try { return NextResponse.json(JSON.parse(match[0])); } catch {}
     }
-    return NextResponse.json({ alimento: "Comida", calorias: 0, proteinas: 0, carbohidratos: 0, grasas: 0, valoracion: txt.slice(0, 200), sugerencia: "", puntuacion: "-" });
+    return NextResponse.json({ calorias: 0, proteinas: 0, carbohidratos: 0, grasas: 0 });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
