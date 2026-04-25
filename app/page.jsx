@@ -282,12 +282,27 @@ function Food() {
   const [error, setError] = useState(null);
   const [mealDay, setMealDay] = useState(() => { const d = new Date().getDay(); return d === 0 ? 6 : d - 1; });
   const [mealEdits, setMealEdits] = useState({});
-  const [editing, setEditing] = useState(null); // { dayIdx, mealIdx }
+  const [editing, setEditing] = useState(null);
   const [editText, setEditText] = useState("");
   const [estimating, setEstimating] = useState(false);
+  const [checkedMeals, setCheckedMeals] = useState({});
   const ref = useRef(null);
 
-  useEffect(() => { setLog(loadLog()); setMealEdits(loadMealEdits()); }, []);
+  useEffect(() => {
+    setLog(loadLog());
+    setMealEdits(loadMealEdits());
+    try {
+      const saved = localStorage.getItem("fc_checked");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.date === todayKey()) setCheckedMeals(parsed.items || {});
+      }
+    } catch {}
+  }, []);
+
+  const saveChecked = (items) => {
+    localStorage.setItem("fc_checked", JSON.stringify({ date: todayKey(), items }));
+  };
 
   const consumed = log.items.reduce((a, i) => ({
     cal: a.cal + (i.cal || 0), prot: a.prot + (i.prot || 0),
@@ -297,13 +312,35 @@ function Food() {
   const resetPhoto = () => { setPreview(null); setResult(null); setError(null); if (ref.current) ref.current.value = ""; };
 
   const addToLog = (item) => {
-    const updated = { ...log, items: [...log.items, { ...item, time: new Date().toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" }) }] };
+    const updated = { ...log, date: todayKey(), items: [...log.items, { ...item, time: new Date().toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" }) }] };
     setLog(updated); saveLog(updated);
   };
 
   const removeFromLog = (idx) => {
     const updated = { ...log, items: log.items.filter((_, i) => i !== idx) };
     setLog(updated); saveLog(updated);
+  };
+
+  const toggleMealCheck = (dayIdx, mealIdx) => {
+    const key = `${dayIdx}-${mealIdx}`;
+    const meal = getMeal(dayIdx, mealIdx);
+    const newChecked = { ...checkedMeals };
+
+    if (checkedMeals[key]) {
+      // Uncheck: remove from log
+      const logIdx = log.items.findIndex(i => i.planKey === key);
+      if (logIdx !== -1) {
+        const updated = { ...log, items: log.items.filter((_, i) => i !== logIdx) };
+        setLog(updated); saveLog(updated);
+      }
+      delete newChecked[key];
+    } else {
+      // Check: add to log
+      addToLog({ name: meal.desc.slice(0, 50), cal: meal.cal, prot: meal.prot, carbs: meal.carbs, fat: meal.fat, planKey: key });
+      newChecked[key] = true;
+    }
+    setCheckedMeals(newChecked);
+    saveChecked(newChecked);
   };
 
   const analyze = async (file) => {
@@ -368,17 +405,15 @@ function Food() {
 
   return (
     <div className="pg">
-      {/* ── DAILY MACRO TRACKER ── */}
       <div className="st">📊 Contador del Día</div>
       <div className="c cg">
         <ProgressBar value={consumed.cal} max={MACROS.calories} color="#FFD93D" label="Calorías (kcal)" />
         <ProgressBar value={consumed.prot} max={MACROS.protein} color="#FF6B9D" label="Proteína (g)" />
         <ProgressBar value={consumed.carbs} max={MACROS.carbs} color="#c084fc" label="Carbohidratos (g)" />
         <ProgressBar value={consumed.fat} max={MACROS.fat} color="#00C9DB" label="Grasa (g)" />
-        {log.items.length === 0 && <p style={{ textAlign: "center", fontSize: 12, color: "#7a8ba8", marginTop: 8 }}>Haz fotos a tus comidas para ir sumando 📸</p>}
+        {log.items.length === 0 && <p style={{ textAlign: "center", fontSize: 12, color: "#7a8ba8", marginTop: 8 }}>Marca tus comidas con ✓ o haz fotos para sumar 📸</p>}
       </div>
 
-      {/* ── FOOD LOG ── */}
       {log.items.length > 0 && (
         <div className="c" style={{ padding: 14 }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>🍽️ Comidas registradas hoy</div>
@@ -388,7 +423,15 @@ function Food() {
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{item.name}</div>
                 <div style={{ fontSize: 11, color: "#7a8ba8" }}>{item.time} · {item.cal}kcal · {item.prot}g prot</div>
               </div>
-              <button onClick={() => removeFromLog(i)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}>
+              <button onClick={() => {
+                if (item.planKey) {
+                  const newChecked = { ...checkedMeals };
+                  delete newChecked[item.planKey];
+                  setCheckedMeals(newChecked);
+                  saveChecked(newChecked);
+                }
+                removeFromLog(i);
+              }} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}>
                 <Trash2 size={16} color="#f87171" />
               </button>
             </div>
@@ -396,7 +439,6 @@ function Food() {
         </div>
       )}
 
-      {/* ── PHOTO ANALYSIS ── */}
       <div className="st" style={{ marginTop: 16 }}>📸 Analiza y Registra</div>
       <input type="file" ref={ref} accept="image/*" capture="environment" style={{ display: "none" }} onChange={e => {
         const f = e.target.files?.[0]; if (!f) return;
@@ -448,14 +490,16 @@ function Food() {
         </div>
       )}
 
-      {/* ── EDITABLE MEAL PLAN ── */}
-      <div className="st" style={{ marginTop: 20 }}>🥗 Plan Comidas <span style={{ fontSize: 12, color: "#7a8ba8", fontWeight: 500 }}>(toca ✏️ para cambiar)</span></div>
+      <div className="st" style={{ marginTop: 20 }}>🥗 Plan Comidas <span style={{ fontSize: 12, color: "#7a8ba8", fontWeight: 500 }}>(✓ suma al contador · ✏️ edita)</span></div>
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 12 }}>
         {DEFAULT_MEALS.map((m, i) => <button key={i} className={`dc ${mealDay === i ? "on3" : ""}`} onClick={() => setMealDay(i)}>{m.label}</button>)}
       </div>
       <div className="c" style={{ background: "rgba(255,217,61,.04)", borderColor: "rgba(255,217,61,.1)", padding: 14 }}>
-        {dayMeals.map((m, i) => (
-          <div key={i} className="mc" style={{ position: "relative" }}>
+        {dayMeals.map((m, i) => {
+          const checkKey = `${mealDay}-${i}`;
+          const isChecked = !!checkedMeals[checkKey];
+          return (
+          <div key={i} className="mc" style={{ opacity: isChecked ? 0.6 : 1, position: "relative" }}>
             {editing?.dayIdx === mealDay && editing?.mealIdx === i ? (
               <div>
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{m.time}</div>
@@ -474,27 +518,32 @@ function Food() {
                 </div>
               </div>
             ) : (
-              <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{m.time} {m.edited && <span style={{ fontSize: 10, color: "#4ade80" }}>✏️ editado</span>}</div>
-                    <div style={{ fontSize: 13, color: "#9db3cc", lineHeight: 1.5 }}>{m.desc}</div>
-                    <div style={{ display: "flex", gap: 8, marginTop: 6, fontSize: 11, color: "#7a8ba8" }}>
-                      <span><strong style={{ color: "#FFD93D" }}>{m.cal}</strong> kcal</span>
-                      <span><strong style={{ color: "#FF6B9D" }}>{m.prot}g</strong> prot</span>
-                      <span><strong style={{ color: "#c084fc" }}>{m.carbs}g</strong> carbs</span>
-                      <span><strong style={{ color: "#00C9DB" }}>{m.fat}g</strong> grasa</span>
-                    </div>
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                <button onClick={() => toggleMealCheck(mealDay, i)}
+                  style={{ width: 28, height: 28, borderRadius: 8, border: isChecked ? "none" : "2px solid #1e3355", background: isChecked ? "#4ade80" : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
+                  {isChecked && <Check size={16} color="#1a1a2e" />}
+                </button>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                    {m.time} {m.edited && <span style={{ fontSize: 10, color: "#4ade80" }}>✏️</span>}
+                    {isChecked && <span style={{ fontSize: 10, color: "#4ade80", marginLeft: 4 }}>✓ sumado</span>}
                   </div>
-                  <div style={{ display: "flex", gap: 4, marginLeft: 8, flexShrink: 0 }}>
-                    <button onClick={() => startEdit(mealDay, i)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><Pencil size={15} color="#7a8ba8" /></button>
-                    {m.edited && <button onClick={() => resetMeal(mealDay, i)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><X size={15} color="#f87171" /></button>}
+                  <div style={{ fontSize: 13, color: "#9db3cc", lineHeight: 1.5, textDecoration: isChecked ? "line-through" : "none" }}>{m.desc}</div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 6, fontSize: 11, color: "#7a8ba8" }}>
+                    <span><strong style={{ color: "#FFD93D" }}>{m.cal}</strong> kcal</span>
+                    <span><strong style={{ color: "#FF6B9D" }}>{m.prot}g</strong> prot</span>
+                    <span><strong style={{ color: "#c084fc" }}>{m.carbs}g</strong> carbs</span>
+                    <span><strong style={{ color: "#00C9DB" }}>{m.fat}g</strong> grasa</span>
                   </div>
                 </div>
-              </>
+                <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+                  {!isChecked && <button onClick={() => startEdit(mealDay, i)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><Pencil size={15} color="#7a8ba8" /></button>}
+                  {m.edited && !isChecked && <button onClick={() => resetMeal(mealDay, i)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><X size={15} color="#f87171" /></button>}
+                </div>
+              </div>
             )}
           </div>
-        ))}
+        );})}
         <div style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: "#7a8ba8" }}>
           Total plan: <strong style={{ color: "#FFD93D" }}>{dayTotal.cal} kcal</strong> · <strong style={{ color: "#FF6B9D" }}>{dayTotal.prot}g prot</strong>
         </div>
@@ -502,6 +551,7 @@ function Food() {
     </div>
   );
 }
+
 
 /* ═══════ CHAT ═══════ */
 function Chat() {
