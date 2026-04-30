@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
-
+const rateMap = new Map();
+function checkRate(ip, limit = 10, window = 60000) {
+  const now = Date.now();
+  const entry = rateMap.get(ip) || { count: 0, start: now };
+  if (now - entry.start > window) { rateMap.set(ip, { count: 1, start: now }); return true; }
+  if (entry.count >= limit) return false;
+  rateMap.set(ip, { ...entry, count: entry.count + 1 });
+  return true;
+}
 export async function POST(req) {
   try {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return NextResponse.json({ error: "API key no configurada" }, { status: 500 });
-
+const ip = req.headers.get("x-forwarded-for") || "local";
+if (!checkRate(ip)) return NextResponse.json({ error: "Demasiadas peticiones. Espera un momento." }, { status: 429 });
     const { image } = await req.json();
     if (!image) return NextResponse.json({ error: "No se recibió imagen" }, { status: 400 });
 

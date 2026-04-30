@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
-
+const rateMap = new Map();
+function checkRate(ip, limit = 20, window = 60000) {
+  const now = Date.now();
+  const entry = rateMap.get(ip) || { count: 0, start: now };
+  if (now - entry.start > window) { rateMap.set(ip, { count: 1, start: now }); return true; }
+  if (entry.count >= limit) return false;
+  rateMap.set(ip, { ...entry, count: entry.count + 1 });
+  return true;
+}
 const SYSTEM = `Eres FitCoach, el entrenador personal y nutricionista de Lidia. Eres cercana, motivadora y profesional.
 
 DATOS DE LIDIA:
@@ -38,7 +46,8 @@ export async function POST(req) {
   try {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return NextResponse.json({ error: "API key no configurada" }, { status: 500 });
-
+const ip = req.headers.get("x-forwarded-for") || "local";
+if (!checkRate(ip)) return NextResponse.json({ error: "Demasiadas peticiones. Espera un momento." }, { status: 429 });
     const { messages } = await req.json();
     if (!messages?.length) return NextResponse.json({ error: "No se recibieron mensajes" }, { status: 400 });
 
