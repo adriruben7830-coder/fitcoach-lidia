@@ -17,7 +17,7 @@ const DEFAULT_MEALS = [
     { time: "🌅 Desayuno", desc: "Batido: 250ml leche soja 0% + 30g whey + 5g creatina + 10g colágeno.", cal: 280, prot: 35, carbs: 15, fat: 5 },
     { time: "☕ Almuerzo", desc: "Café con leche soja + mini bocata jamón dulce y queso.", cal: 280, prot: 14, carbs: 30, fat: 10 },
     { time: "🌴 Comida", desc: "Pechuga pollo plancha + arroz basmati + brócoli salteado.", cal: 650, prot: 48, carbs: 70, fat: 14 },
-    { time: "🌊 Merienda", desc: "Yogur griego + plátano + 15 almendras + tostada integral con mantequilla cacahuete.", cal: 450, prot: 22, carbs: 50, fat: 20 },
+    { time: "🌊 Merienda", desc: "Yogur griego + plátano + 15 almendras + tostada integral con hummus.", cal: 450, prot: 22, carbs: 50, fat: 20 },
     { time: "🌙 Cena", desc: "Revuelto de pavo con champiñones y pimientos. Ensalada. Pan integral.", cal: 500, prot: 35, carbs: 35, fat: 20 },
   ]},
   { label: "Martes", meals: [
@@ -51,7 +51,7 @@ const DEFAULT_MEALS = [
   { label: "Sábado", meals: [
     { time: "🌅 Desayuno", desc: "Batido: 250ml leche soja 0% + 30g whey + 5g creatina + 10g colágeno.", cal: 280, prot: 35, carbs: 15, fat: 5 },
     { time: "☕ Almuerzo", desc: "Café con leche soja + mini bocata jamón dulce y queso.", cal: 280, prot: 14, carbs: 30, fat: 10 },
-    { time: "🌴 Comida", desc: "Arroz abundante con pollo al curry suave, leche coco light y verduras.", cal: 680, prot: 42, carbs: 75, fat: 18 },
+    { time: "🌴 Comida", desc: "Pechuga de pollo al horno con patatas asadas y verduras salteadas.", cal: 680, prot: 42, carbs: 75, fat: 18 },
     { time: "🌊 Merienda", desc: "2 tostadas integrales con aguacate y huevo. Fruta.", cal: 440, prot: 20, carbs: 40, fat: 22 },
     { time: "🌙 Cena", desc: "Pizza casera integral grande con pavo, champiñones y mozzarella.", cal: 560, prot: 36, carbs: 50, fat: 22 },
   ]},
@@ -59,7 +59,7 @@ const DEFAULT_MEALS = [
     { time: "🌅 Desayuno", desc: "Batido: 250ml leche soja 0% + 30g whey + 5g creatina + 10g colágeno.", cal: 280, prot: 35, carbs: 15, fat: 5 },
     { time: "☕ Almuerzo", desc: "Café con leche soja + mini bocata jamón dulce y queso.", cal: 280, prot: 14, carbs: 30, fat: 10 },
     { time: "🌴 Comida", desc: "Pollo asado con patatas horno abundantes y ensalada mediterránea.", cal: 700, prot: 46, carbs: 65, fat: 22 },
-    { time: "🌊 Merienda", desc: "Yogur griego con crema cacahuete + plátano + avena.", cal: 420, prot: 24, carbs: 42, fat: 18 },
+    { time: "🌊 Merienda", desc: "Yogur griego con miel, plátano + avena y nueces.", cal: 420, prot: 24, carbs: 42, fat: 18 },
     { time: "🌙 Cena", desc: "Crema calabaza + 2 tostadas con pavo y queso. Ensalada.", cal: 480, prot: 30, carbs: 45, fat: 18 },
   ]},
 ];
@@ -568,7 +568,10 @@ function Chat() {
   useEffect(() => { end.current?.scrollIntoView({ behavior:"smooth" }); }, [msgs, busy]);
 
   const saveMsgs = (m) => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(m.slice(-MAX_MSGS))); } catch {}
+    try {
+      const toSave = m.map(msg => ({ r:msg.r, t:msg.t, img:msg.img||null }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave.slice(-MAX_MSGS)));
+    } catch {}
   };
 
   const clearChat = () => {
@@ -586,8 +589,7 @@ function Chat() {
   };
 
   const removePhoto = () => {
-    setPreview(null);
-    setPendingImg(null);
+    setPreview(null); setPendingImg(null);
     if (camRef.current) camRef.current.value = "";
   };
 
@@ -596,42 +598,39 @@ function Chat() {
     const txt = inp.trim();
     setInp("");
 
-    let userMsgContent;
-    let userMsgDisplay;
-
-    if (pendingImg) {
-      userMsgContent = [
-        { type: "image", source: { type: "base64", media_type: "image/jpeg", data: pendingImg } },
-        { type: "text", text: txt || "Analiza esta comida: dime qué es, las macros completas (calorías, proteína, carbohidratos, grasa) y si encaja con mi objetivo de ganar masa muscular." }
-      ];
-      userMsgDisplay = { r:"u", t: txt || "📸 Foto enviada — analiza las macros", img: preview };
-    } else {
-      userMsgContent = txt;
-      userMsgDisplay = { r:"u", t: txt };
-    }
-
-    setPreview(null);
-    setPendingImg(null);
-    if (camRef.current) camRef.current.value = "";
-
-    const updated = [...msgs, userMsgDisplay];
+    const userDisplay = { r:"u", t: txt || "📸 Analiza esta comida", img: preview||null };
+    const updated = [...msgs, userDisplay];
     setMsgs(updated);
     saveMsgs(updated);
+    setPreview(null);
+    if (camRef.current) camRef.current.value = "";
     setBusy(true);
 
     try {
-      const conv = updated.slice(1);
+      // Construir historial SIN imágenes antiguas (solo texto)
+      const conv = updated.slice(1, -1);
       const apiMsgs = conv.map(m => ({
         role: m.r === "u" ? "user" : "assistant",
-        content: m.img
-          ? [{ type:"image", source:{ type:"base64", media_type:"image/jpeg", data:pendingImg||"" } }, { type:"text", text: m.t }]
-          : m.t
+        content: m.t
       }));
-      apiMsgs[apiMsgs.length-1].content = userMsgContent;
+
+      // Último mensaje — puede tener imagen
+      let lastContent;
+      if (pendingImg) {
+        lastContent = [
+          { type:"image", source:{ type:"base64", media_type:"image/jpeg", data:pendingImg } },
+          { type:"text", text: txt || "Analiza esta comida en detalle: dime qué alimentos ves, estima las cantidades a ojo, y calcula las macros completas (calorías, proteína, carbohidratos, grasa). Dime también si encaja con mi objetivo de ganar masa muscular." }
+        ];
+      } else {
+        lastContent = txt;
+      }
+
+      apiMsgs.push({ role:"user", content: lastContent });
+      setPendingImg(null);
 
       const r = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ messages: apiMsgs })
       });
       const data = await r.json();
@@ -675,11 +674,11 @@ function Chat() {
       )}
 
       <div className="ci" style={{ flexShrink:0 }}>
-        <input type="file" ref={camRef} accept="image/*" capture="environment" style={{ display:"none" }} onChange={e => handlePhoto(e.target.files?.[0])}/>
-        <button onClick={() => camRef.current?.click()} style={{ width:48, height:48, borderRadius:16, border:"1px solid rgba(255,255,255,.08)", background:"rgba(255,255,255,.04)", color:"#7a8ba8", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+        <input type="file" ref={camRef} accept="image/*" capture="environment" style={{ display:"none" }} onChange={e=>handlePhoto(e.target.files?.[0])}/>
+        <button onClick={()=>camRef.current?.click()} style={{ width:48, height:48, borderRadius:16, border:"1px solid rgba(255,255,255,.08)", background:"rgba(255,255,255,.04)", color:"#7a8ba8", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
           <Camera size={20}/>
         </button>
-        <input type="text" placeholder={pendingImg ? "Añade un comentario... (opcional)" : "Pregúntame... 🌺"} value={inp} onChange={e=>setInp(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()}/>
+        <input type="text" placeholder={pendingImg?"Añade un comentario... (opcional)":"Pregúntame... 🌺"} value={inp} onChange={e=>setInp(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()}/>
         <button className="sn" onClick={send} disabled={(!inp.trim()&&!pendingImg)||busy}><Send size={18}/></button>
       </div>
     </div>
