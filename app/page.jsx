@@ -349,7 +349,7 @@ function Food() {
 
   const getMeal = (dayIdx, mealIdx) => {
     const key=`${dayIdx}-${mealIdx}`, edit=mealEdits[key], orig=DEFAULT_MEALS[dayIdx].meals[mealIdx];
-    if(edit) return { ...orig, desc:edit.desc, cal:edit.cal, prot:edit.prot, carbs:edit.carbs, fat:edit.fat, edited:true };
+    if(edit && (edit.cal > 0 || edit.prot > 0)) return { ...orig, desc:edit.desc, cal:edit.cal, prot:edit.prot, carbs:edit.carbs, fat:edit.fat, edited:true };
     return { ...orig, edited:false };
   };
 
