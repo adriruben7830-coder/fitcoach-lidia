@@ -317,7 +317,8 @@ function Food() {
   const [mealEdits, setMealEdits] = useState({});
   const [editing, setEditing] = useState(null);
   const [editText, setEditText] = useState("");
-  const [estimating, setEstimating] = useState(false);
+ const [estimating, setEstimating] = useState(false);
+const [editError, setEditError] = useState(null);
   const [checkedMeals, setCheckedMeals] = useState({});
   const [showConfetti, setShowConfetti] = useState(false);
   const ref = useRef(null);
@@ -382,25 +383,29 @@ function Food() {
 
   const startEdit=(dayIdx,mealIdx)=>{ setEditing({dayIdx,mealIdx}); const key=`${dayIdx}-${mealIdx}`; setEditText(mealEdits[key]?.desc||""); };
 
-  const saveEdit=async()=>{
-    if(!editText.trim()||!editing) return;
-    setEstimating(true);
-    try {
-      const r=await fetch("/api/estimate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({meal:editText.trim()})});
-      const data=await r.json();
-      const key=`${editing.dayIdx}-${editing.mealIdx}`;
-      const orig=DEFAULT_MEALS[editing.dayIdx].meals[editing.mealIdx];
-      const newEdits={...mealEdits,[key]:{
-        desc:editText.trim(),
-        cal:data.calorias>0?data.calorias:orig.cal,
-        prot:data.proteinas>0?data.proteinas:orig.prot,
-        carbs:data.carbohidratos>0?data.carbohidratos:orig.carbs,
-        fat:data.grasas>0?data.grasas:orig.fat
-      }};
-      setMealEdits(newEdits); saveMealEdits(newEdits);
-    } catch(e){ console.error(e); }
-    setEstimating(false); setEditing(null); setEditText("");
-  };
+ const saveEdit=async()=>{
+  if(!editText.trim()||!editing) return;
+  setEstimating(true); setEditError(null);
+  try {
+    const r=await fetch("/api/estimate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({meal:editText.trim()})});
+    const data=await r.json();
+    if(data.error) throw new Error(data.error);
+    const key=`${editing.dayIdx}-${editing.mealIdx}`;
+    const orig=DEFAULT_MEALS[editing.dayIdx].meals[editing.mealIdx];
+    const newEdits={...mealEdits,[key]:{
+      desc:editText.trim(),
+      cal:data.calorias>0?data.calorias:orig.cal,
+      prot:data.proteinas>0?data.proteinas:orig.prot,
+      carbs:data.carbohidratos>0?data.carbohidratos:orig.carbs,
+      fat:data.grasas>0?data.grasas:orig.fat
+    }};
+    setMealEdits(newEdits); saveMealEdits(newEdits);
+    setEditing(null); setEditText("");
+  } catch(e){
+    setEditError("Error al calcular. Inténtalo de nuevo.");
+  }
+  setEstimating(false);
+};
 
   const resetMeal=(dayIdx,mealIdx)=>{ const key=`${dayIdx}-${mealIdx}`,newEdits={...mealEdits}; delete newEdits[key]; setMealEdits(newEdits); saveMealEdits(newEdits); };
 
@@ -528,6 +533,7 @@ function Food() {
                     <button onClick={saveEdit} disabled={estimating||!editText.trim()} style={{ flex:1, padding:10, borderRadius:10, border:"none", background:"#4ade80", color:"#1a1a2e", fontSize:13, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:4, opacity:estimating?0.6:1 }}>
                       {estimating?<><Loader size={14} className="spin"/>Calculando...</>:<><Check size={14}/>Guardar</>}
                     </button>
+                    {editError && <p style={{fontSize:11,color:"#f87171",marginBottom:6}}>{editError}</p>}
                     <button onClick={()=>setEditing(null)} style={{ padding:"10px 14px", borderRadius:10, border:"1px solid rgba(255,255,255,.08)", background:"rgba(255,255,255,.04)", color:"#7a8ba8", fontSize:13, cursor:"pointer" }}>Cancelar</button>
                   </div>
                 </div>
