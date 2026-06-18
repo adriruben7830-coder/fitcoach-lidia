@@ -401,8 +401,8 @@ const [editError, setEditError] = useState(null);
     }};
     setMealEdits(newEdits); saveMealEdits(newEdits);
     setEditing(null); setEditText("");
-  } catch(e){
-    setEditError("Error al calcular. Inténtalo de nuevo.");
+ } catch(e){
+    setEditError("Error: " + String(e.message || e));
   }
   setEstimating(false);
 };
@@ -417,7 +417,7 @@ const [editError, setEditError] = useState(null);
       const data=await r.json();
       if(data.error) throw new Error(data.error);
       setResult(data);
-    } catch(e){ setError(String(e.message||e)); }
+    } catch(e){ setError("Error: " + String(e.message || e)); }
     setBusy(false);
   };
 
