@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 const rateMap = new Map();
-function checkRate(ip, limit = 20, window = 60000) {
+function checkRate(ip, limit = 100, window = 60000) {
   const now = Date.now();
   const entry = rateMap.get(ip) || { count: 0, start: now };
   if (now - entry.start > window) { rateMap.set(ip, { count: 1, start: now }); return true; }
